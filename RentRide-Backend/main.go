@@ -34,8 +34,11 @@ func main() {
 	tickets := &auth.Issuer{Secret: []byte(secret), TTL: time.Hour}
 	h := &handler.Handler{Store: &store.Store{Pool: pool}, Tickets: tickets}
 
-	// login = ต้องมีตั๋ว (เพิ่ม admin = login + บทบาท admin ตอนทำหลังบ้าน)
+	// login = ต้องมีตั๋ว, admin = login + บทบาท admin
 	login := func(next http.HandlerFunc) http.HandlerFunc { return mw.RequireLogin(tickets, next) }
+	admin := func(next http.HandlerFunc) http.HandlerFunc {
+		return login(mw.RequireRole("admin", next))
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", h.Health)
@@ -44,6 +47,12 @@ func main() {
 	mux.HandleFunc("GET /api/me", login(h.Me))
 	mux.HandleFunc("GET /api/cars", h.ListCars)
 	mux.HandleFunc("GET /api/cars/{id}", h.GetCar)
+
+	// การจอง
+	mux.HandleFunc("POST /api/bookings", login(h.CreateBooking))
+	mux.HandleFunc("GET /api/me/bookings", login(h.MyBookings))
+	mux.HandleFunc("POST /api/bookings/{id}/cancel", login(h.CancelBooking))
+	mux.HandleFunc("GET /api/admin/bookings", admin(h.AllBookings))
 
 	origins := strings.Split(os.Getenv("ALLOWED_ORIGINS"), ",")
 
